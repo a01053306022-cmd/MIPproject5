@@ -5,7 +5,7 @@ import plotly.express as px
 import os
 
 # 1. 데이터베이스 연결 설정
-DB_PATH = sqlite3.connect('MIP_project5.db')
+DB_PATH = "MIP_project5.db"
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -35,15 +35,15 @@ with tab1:
     query1 = """
     SELECT a.연령대, '2013' as 연도, a."2013" as 인터넷시간, b."2013" as 우울감비율 FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
     UNION ALL
-    SELECT a.연령대, '2015', a."2015", b."2015" FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    SELECT a.연령대, '2015', a."2015", b."2015" FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     UNION ALL
-    SELECT a.연령대, '2017', a."2017", b."2017" FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    SELECT a.연령대, '2017', a."2017", b."2017" FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     UNION ALL
-    SELECT a.연령대, '2019', a."2019", b."2019" FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    SELECT a.연령대, '2019', a."2019", b."2019" FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     UNION ALL
-    SELECT a.연령대, '2021', a."2021", b."2021" FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    SELECT a.연령대, '2021', a."2021", b."2021" FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     UNION ALL
-    SELECT a.연령대, '2023', a."2023", b."2023" FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    SELECT a.연령대, '2023', a."2023", b."2023" FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     """
     
     conn = get_connection()
@@ -69,8 +69,8 @@ with tab2:
     # 2023년 데이터 기준 매칭 (가장 최근 수치)
     query2 = """
     SELECT a.연령대, a.고립도_비율, b."2023" as 우울감비율
-    FROM 사회적_고립도_통계 a
-    JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    FROM social_isolation a
+    JOIN depression_experience b ON a.연령대 = b.연령별
     """
     
     conn = get_connection()
@@ -99,8 +99,8 @@ with tab3:
         b.범행동기, 
         SUM(b.피의자_인원수) as 총_인원수,
         a."2023" as 우울감수준
-    FROM 우울감경험률 a
-    JOIN 결과_범죄 b ON a.연령별 = b.연령대
+    FROM depression_experience a
+    JOIN offender_motive b ON a.연령별 = b.연령대
     WHERE b.범행동기 IN ('우발적', '현실불만', '무동기')
     GROUP BY b.연령대, b.범죄유형, b.범행동기
     ORDER BY 우울감수준 DESC
