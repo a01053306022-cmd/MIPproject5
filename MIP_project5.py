@@ -4,134 +4,112 @@ import sqlite3
 import plotly.express as px
 import os
 
-# --- [설정 및 DB 체크] ---
-st.set_page_config(page_title="화병-범죄 상관분석", layout="wide")
+# --- [1. 기본 설정 및 DB 연결] ---
+st.set_page_config(page_title="화병-사회지표-범죄 데이터 대시보드", layout="wide")
 DB_FILE = 'MIP_project5.db'
 
 if not os.path.exists(DB_FILE):
-    st.error(f"⚠️ 데이터베이스 파일({DB_FILE})이 누락되었습니다.")
+    st.error(f"⚠️ '{DB_FILE}' 파일을 찾을 수 없습니다. 파일 이름을 확인해주세요.")
     st.stop()
 
 def run_query(q):
+    """SQL 실행 및 데이터프레임 반환"""
     with sqlite3.connect(DB_FILE) as conn:
         return pd.read_sql(q, conn)
 
-# --- [메인 타이틀] ---
-st.title("📊 화병 지표와 무동기 범죄의 상관성 정밀 분석")
+# --- [2. SQL 쿼리 생성기 (오류 방지용)] ---
+# 지표 테이블(2013)과 범죄 테이블(2013 년)의 컬럼 형식이 다르므로 구분하여 처리합니다.
+YEARS = ['2013', '2015', '2017', '2019', '2021', '2023']
 
-tab1, tab2, tab3 = st.tabs(["🌐 1. 인터넷 사용 & 우울감", "🤝 2. 사회적 고립도", "⚖️ 3. 화병 vs 무동기 범죄"])
+def build_unpivot_query(table, age_col, value_name, is_crime=False):
+    """가로로 긴 데이터를 세로로 길게 만드는 쿼리 생성 (줄바꿈 포함)"""
+    queries = []
+    for y in YEARS:
+        # 범죄 테이블은 컬럼명이 "2013 년" 형태, 나머지는 "2013" 형태
+        col_name = f'"{y} 년"' if is_crime else f'"{y}"'
+        queries.append(f"SELECT TRIM({age_col}) as 연령대, {y} as 연도, {col_name} as {value_name} FROM {table}")
+    return "\n UNION ALL \n".join(queries)
 
-# --- [Tab 1: 인터넷 & 우울감 (전체 연령대 표시)] ---
+# --- [3. 메인 대시보드 구성] ---
+st.title("🧠 사회 지표 기반 화병 및 무동기 범죄 상관분석")
+tab1, tab2, tab3 = st.tabs(["🌐 1. 인터넷 & 우울감", "🤝 2. 고립도 & 우울감", "⚖️ 3. 화병 vs 무동기범죄"])
+
+# --- Tab 1: 인터넷(X) vs 우울감(y) ---
 with tab1:
-    st.subheader("연도별/연령별 인터넷 사용 시간과 우울감 추이")
+    st.subheader("인터넷 사용 시간이 많을수록 우울감이 심화될까?")
     
-    # 지표 테이블들은 컬럼명이 "2013" 형태입니다.
-    sql1 = """
-    SELECT TRIM(연령대) as 연령대, 2013 as 연도, "2013" as 값 FROM internet_weektime \n
-    UNION ALL SELECT TRIM(연령대), 2015, "2015" FROM internet_weektime \n
-    UNION ALL SELECT TRIM(연령대), 2017, "2017" FROM internet_weektime \n
-    UNION ALL SELECT TRIM(연령대), 2019, "2019" FROM internet_weektime \n
-    UNION ALL SELECT TRIM(연령대), 2021, "2021" FROM internet_weektime \n
-    UNION ALL SELECT TRIM(연령대), 2023, "2023" FROM internet_weektime
-    """
-    df_internet = run_query(sql1)
+    sql_x1 = build_unpivot_query("internet_weektime", "연령대", "인터넷시간")
+    sql_y1 = build_unpivot_query("depression_experience", "연령별", "우울감")
     
-    # 60대만 나오는 문제를 방지하기 위해 데이터를 확인하고 시각화
-    fig1 = px.line(df_internet, x='연도', y='값', color='연령대', markers=True,
-                  title="연령대별 인터넷 사용 시간 변화 (전체 세대)")
-    fig1.update_xaxes(tickvals=[2013, 2015, 2017, 2019, 2021, 2023])
+    df_x1 = run_query(sql_x1)
+    df_y1 = run_query(sql_y1)
+    df1 = pd.merge(df_x1, df_y1, on=['연도', '연령대'])
+
+    fig1 = px.scatter(df1, x='인터넷시간', y='우울감', color='연령대', trendline="ols",
+                     hover_data=['연도'], title="인터넷 사용 시간(X)과 우울감(y)의 상관관계")
     st.plotly_chart(fig1, use_container_width=True)
 
     with st.expander("📄 사용된 SQL 전체 보기"):
-        st.code(sql1, language='sql')
+        st.write("**독립변수(X) 추출:**")
+        st.code(sql_x1, language='sql')
+        st.write("**종속변수(y) 추출:**")
+        st.code(sql_y1, language='sql')
 
-# --- [Tab 2: 사회적 고립도 (연도별)] ---
+# --- Tab 2: 사회적 고립도(X) vs 우울감(y) ---
 with tab2:
-    st.subheader("사회적 고립도 연도별 추이")
+    st.subheader("사회적 고립감을 많이 느낄수록 우울감이 심화될까?")
     
-    sql2 = """
-    SELECT TRIM(연령별) as 연령대, 2013 as 연도, "2013" as 고립도 FROM social_isolation \n
-    UNION ALL SELECT TRIM(연령별), 2015, "2015" FROM social_isolation \n
-    UNION ALL SELECT TRIM(연령별), 2017, "2017" FROM social_isolation \n
-    UNION ALL SELECT TRIM(연령별), 2019, "2019" FROM social_isolation \n
-    UNION ALL SELECT TRIM(연령별), 2021, "2021" FROM social_isolation \n
-    UNION ALL SELECT TRIM(연령별), 2023, "2023" FROM social_isolation
-    """
-    df2 = run_query(sql2)
+    sql_x2 = build_unpivot_query("social_isolation", "연령별", "고립도")
+    sql_y2 = build_unpivot_query("depression_experience", "연령별", "우울감")
     
-    fig2 = px.line(df2, x='연도', y='고립도', color='연령대', markers=True,
-                 title="연도별/연령대별 사회적 고립도 현황")
-    fig2.update_xaxes(tickvals=[2013, 2015, 2017, 2019, 2021, 2023])
+    df_x2 = run_query(sql_x2)
+    df_y2 = run_query(sql_y2)
+    df2 = pd.merge(df_x2, df_y2, on=['연도', '연령대'])
+
+    fig2 = px.scatter(df2, x='고립도', y='우울감', color='연령대', trendline="ols",
+                     hover_data=['연도'], title="사회적 고립도(X)와 우울감(y)의 상관관계")
     st.plotly_chart(fig2, use_container_width=True)
 
     with st.expander("📄 사용된 SQL 전체 보기"):
-        st.code(sql2, language='sql')
+        st.write("**독립변수(X) 추출:**")
+        st.code(sql_x2, language='sql')
+        st.write("**종속변수(y) 추출:**")
+        st.code(sql_y2, language='sql')
 
-# --- [Tab 3: X(정신건강) vs y(무동기 범죄)] ---
+# --- Tab 3: 정신건강(X1, X2) vs 무동기범죄(y) ---
 with tab3:
-    st.subheader("화병(X: 스트레스, 우울감)과 무동기 범죄(y)의 상관관계")
-
-    # 1. 스트레스 데이터 Long 변환
-    sql_stress = """
-    SELECT TRIM(연령별) as 연령대, 2013 as 연도, "2013" as 스트레스 FROM stress_perception \n
-    UNION ALL SELECT TRIM(연령별), 2015, "2015" FROM stress_perception \n
-    UNION ALL SELECT TRIM(연령별), 2017, "2017" FROM stress_perception \n
-    UNION ALL SELECT TRIM(연령별), 2019, "2019" FROM stress_perception \n
-    UNION ALL SELECT TRIM(연령별), 2021, "2021" FROM stress_perception \n
-    UNION ALL SELECT TRIM(연령별), 2023, "2023" FROM stress_perception
-    """
-    # 2. 우울감 데이터 Long 변환
-    sql_dep = """
-    SELECT TRIM(연령별) as 연령대, 2013 as 연도, "2013" as 우울감 FROM depression_experience \n
-    UNION ALL SELECT TRIM(연령별), 2015, "2015" FROM depression_experience \n
-    UNION ALL SELECT TRIM(연령별), 2017, "2017" FROM depression_experience \n
-    UNION ALL SELECT TRIM(연령별), 2019, "2019" FROM depression_experience \n
-    UNION ALL SELECT TRIM(연령별), 2021, "2021" FROM depression_experience \n
-    UNION ALL SELECT TRIM(연령별), 2023, "2023" FROM depression_experience
-    """
-    # 3. 무동기 범죄 데이터 (이 테이블은 "2013 년" 형태임에 주의!)
-    sql_crime = """
-    SELECT '보복+현실불만+우발적' as 동기, 2013 as 연도, SUM("2013 년") as 건수 FROM crime_motive \n
-    WHERE 범행동기별 IN ('보복', '현실불만', '우발적') \n
-    UNION ALL SELECT '보복+현실불만+우발적', 2015, SUM("2015 년") FROM crime_motive \n
-    WHERE 범행동기별 IN ('보복', '현실불만', '우발적') \n
-    UNION ALL SELECT '보복+현실불만+우발적', 2017, SUM("2017 년") FROM crime_motive \n
-    WHERE 범행동기별 IN ('보복', '현실불만', '우발적') \n
-    UNION ALL SELECT '보복+현실불만+우발적', 2019, SUM("2019 년") FROM crime_motive \n
-    WHERE 범행동기별 IN ('보복', '현실불만', '우발적') \n
-    UNION ALL SELECT '보복+현실불만+우발적', 2021, SUM("2021 년") FROM crime_motive \n
-    WHERE 범행동기별 IN ('보복', '현실불만', '우발적') \n
-    UNION ALL SELECT '보복+현실불만+우발적', 2023, SUM("2023 년") FROM crime_motive \n
-    WHERE 범행동기별 IN ('보복', '현실불만', '우발적') \n
-    GROUP BY 연도
-    """
+    st.subheader("화병이 심화될수록 무동기 범죄를 많이 저지를까?")
     
-    df_s = run_query(sql_stress)
-    df_d = run_query(sql_dep)
-    df_c = run_query(sql_crime)
+    # 정신건강 지표 (X1: 스트레스, X2: 우울감)
+    sql_x3_stress = build_unpivot_query("stress_perception", "연령별", "스트레스")
+    sql_x3_dep = build_unpivot_query("depression_experience", "연령별", "우울감")
     
-    # 데이터 병합 (X1, X2, y)
-    df_x = pd.merge(df_s, df_d, on=['연령대', '연도'])
-    df_total = pd.merge(df_x, df_c, on='연도')
+    # 무동기 범죄 (y: 보복, 현실불만, 우발적 통합)
+    crime_parts = []
+    for y in YEARS:
+        crime_parts.append(f"SELECT {y} as 연도, SUM(\"{y} 년\") as 범죄건수 FROM crime_motive \n WHERE 범행동기별 IN ('보복', '현실불만', '우발적')")
+    sql_y3 = "\n UNION ALL \n".join(crime_parts)
+    
+    df_s = run_query(sql_x3_stress)
+    df_d = run_query(sql_x3_dep)
+    df_c = run_query(sql_y3)
+    
+    df_mh = pd.merge(df_s, df_d, on=['연도', '연령대'])
+    df3 = pd.merge(df_mh, df_c, on='연도')
 
-    # 시각화: 독립변수(X)와 종속변수(y)의 관계
     col1, col2 = st.columns(2)
     with col1:
         st.write("**X1: 스트레스 인지율 vs y: 무동기 범죄**")
-        fig3_1 = px.scatter(df_total, x='스트레스', y='건수', color='연령대', 
-                           trendline="ols", hover_data=['연도'],
-                           labels={'스트레스':'스트레스 인지율 (%)', '건수':'무동기 범죄 건수 (전체)'})
+        fig3_1 = px.scatter(df3, x='스트레스', y='범죄건수', color='연령대', trendline="ols",
+                           title="스트레스와 무동기 범죄의 관계")
         st.plotly_chart(fig3_1, use_container_width=True)
 
     with col2:
         st.write("**X2: 우울감 경험률 vs y: 무동기 범죄**")
-        fig3_2 = px.scatter(df_total, x='우울감', y='건수', color='연령대', 
-                           trendline="ols", hover_data=['연도'],
-                           labels={'우울감':'우울감 경험률 (%)', '건수':'무동기 범죄 건수 (전체)'})
+        fig3_2 = px.scatter(df3, x='우울감', y='범죄건수', color='연령대', trendline="ols",
+                           title="우울감과 무동기 범죄의 관계")
         st.plotly_chart(fig3_2, use_container_width=True)
 
-    with st.expander("📄 사용된 SQL 전체 보기 (X변수 & y변수)"):
-        st.write("**1. 독립변수(X) 추출용 SQL (스트레스 예시):**")
-        st.code(sql_stress, language='sql')
-        st.write("**2. 종속변수(y) 추출용 SQL (범죄 합계):**")
-        st.code(sql_crime, language='sql')
+    with st.expander("📄 사용된 SQL 전체 보기"):
+        st.write("**무동기 범죄(y) 통합 추출 SQL:**")
+        st.code(sql_y3, language='sql')
