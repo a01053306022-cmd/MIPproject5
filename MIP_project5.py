@@ -5,7 +5,7 @@ import plotly.express as px
 import os
 
 # 1. 데이터베이스 연결 설정
-DB_PATH = 'MIP_project5.db'
+DB_PATH = sqlite3.connect('MIP_project5.db')
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
