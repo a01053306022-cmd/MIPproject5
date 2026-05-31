@@ -33,7 +33,7 @@ with tab1:
     st.header("1. 인터넷 사용 시간과 우울감의 추이")
     
     query1 = """
-    SELECT a.연령대, '2013' as 연도, a."2013" as 인터넷시간, b."2013" as 우울감비율 FROM 연령별_주_평균_인터넷_사용_시간 a JOIN 우울감경험률 b ON a.연령대 = b.연령별
+    SELECT a.연령대, '2013' as 연도, a."2013" as 인터넷시간, b."2013" as 우울감비율 FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     UNION ALL
     SELECT a.연령대, '2015', a."2015", b."2015" FROM internet_weektime a JOIN depression_experience b ON a.연령대 = b.연령별
     UNION ALL
