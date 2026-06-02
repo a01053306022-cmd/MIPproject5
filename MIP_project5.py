@@ -75,7 +75,7 @@ with tab1:
     with c2:
         st.plotly_chart(px.bar(df1_grouped, x='집단', y='스트레스', color='연도', barmode='group', title="집단별 평균 스트레스"), use_container_width=True)
 
-    with st.expander("📄 1탭 사용된 SQL 전체 보기"):
+    with st.expander("📄 사용된 SQL 쿼리 보기"):
         st.write("**1. 인터넷 사용 시간(독립변수 X):**")
         st.code(sql_x, language='sql')
         st.write("**2. 우울감 및 스트레스(종속변수 y):**")
@@ -94,7 +94,7 @@ with tab2:
     fig2.update_traces(textposition='top center')
     st.plotly_chart(fig2, use_container_width=True)
 
-    with st.expander("📄 2탭 사용된 SQL 전체 보기"):
+    with st.expander("📄 사용된 SQL 쿼리 보기"):
         st.write("**1. 사회적 고립도 추출:**")
         st.code(sql_iso, language='sql')
         st.write("**2. 우울감 데이터 추출 (1탭과 동일):**")
@@ -146,7 +146,7 @@ SELECT '2023', '우발적', CAST("2023 년" AS INTEGER) FROM crime_motive WHERE 
         fig3.update_layout(title_text=f"{year}년 복합 분석", barmode='stack')
         st.plotly_chart(fig3, use_container_width=True)
 
-    with st.expander("📄 3탭 사용된 SQL 전체 보기"):
+    with st.expander("📄 사용된 SQL 쿼리 보기"):
         st.write("**1. 연령별 전체 범죄 건수:**")
         st.code(sql_age, language='sql')
         st.write("**2. 범죄 동기 비중 추출:**")
