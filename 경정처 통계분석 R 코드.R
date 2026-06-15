@@ -55,6 +55,8 @@ summary(lm(depression ~ internet, data = df_net_dep))   # p-value = 0.298
 cor_result4 <- cor.test(df_net_str$internet, df_net_str$stress, method = "pearson")
 summary(lm(stress ~ internet, data = df_net_str))   # p-value = 1.761e-06
 
+merged_df <- inner_join(iso_long, dep_long, by = c("연령별", "year"))
+
 # 시각화 (전체 데이터 산점도 + 회귀선)
 # plot(merged_df$isolation, merged_df$depression, main="고립도 vs 우울감 (전 연령/전 연도)")
 # abline(lm(depression ~ isolation, data=merged_df), col="blue")
@@ -102,3 +104,58 @@ summary(lm_1_4)   # p-value = 0.298
 # - Estimate(기울기): 고립도 1단위 증가 시 우울감 증가량
 # - Pr(>|t|): 0.05보다 작으면 통계적으로 유의미함
 # - Adjusted R-squared: 모델의 설명력 (1에 가까울수록 정확함)
+
+# ============================================
+# 0. 데이터 중간 가공
+# ============================================
+
+# 1. 모든 데이터 Long Format 변환 및 컬럼명 통일
+# 정신건강 지표
+str_long <- stress_perception %>% pivot_longer(cols = starts_with("X"), names_to = "year", values_to = "stress")
+dep_long <- depression_experience %>% pivot_longer(cols = starts_with("X"), names_to = "year", values_to = "depression")
+
+# 범죄 지표 (crime_age 테이블 사용 - 연령별 범죄 건수)
+crime_long <- crime_age %>% pivot_longer(cols = starts_with("X"), names_to = "year", values_to = "crime_count")
+crime_long$year <- gsub("\\.년", "", crime_long$year)
+
+# 컬럼명 통일 (연령대 -> 연령별)
+names(str_long)[1] <- "age_group"
+names(dep_long)[1] <- "age_group"
+names(crime_long)[1] <- "age_group"
+
+# 2. 하나의 데이터프레임으로 통합 (분석용 통합 데이터)
+df_final <- str_long %>%
+  inner_join(dep_long, by = c("age_group", "year")) %>%
+  inner_join(crime_long, by = c("age_group", "year"))
+
+# 불필요한 '전체' 데이터가 있다면 제거 (분석 왜곡 방지)
+df_final <- df_final %>% filter(!grepl("합계|전체", age_group))
+
+# ============================================
+# 4. 다중 선형 회귀 분석
+# ============================================
+
+# 다중 회귀 분석 실시
+final_lm_model <- lm(crime_count ~ stress + depression, data = df_final)
+
+# 결과 리포트
+summary(final_lm_model)   # p-value = 0.786(stress), 0.007(depression), 0.02104(모델)
+                          # Adjusted R-squard = 0.1931 (모델 설명력)
+
+# depression의 estimate: -18238.9 = 우울감 경험률이 1% 증가할 때마다 범죄 건수가 18,239건 감소
+# --> 무기력증 의심 OR 범죄율이 낮은 노인층의 영향일 수 있음
+
+# ============================================
+# 5. 스피어먼 서열 상관분석
+# ============================================
+
+# 2023년도 데이터만 뽑아서 연령대별 경향성 확인
+df_2023 <- df_final %>% filter(year == "X2023")
+
+# 스피어먼 상관계수 산출
+spearman_result <- cor.test(df_2023$stress, df_2023$crime_count, method = "spearman")
+
+# 결과 출력
+print(spearman_result)
+
+# p-value = 0.5167로 유의하지 않음
